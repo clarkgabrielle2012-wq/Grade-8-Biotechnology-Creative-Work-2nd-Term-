@@ -1,0 +1,2144 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BioLab Quest: Grade 8 Lab &amp; Genetics Edition</title>
+  <!-- Load Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Load Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #020617;
+      color: #f8fafc;
+      overflow-x: hidden;
+    }
+
+    /* Board container and responsive 10x5 snaking grid */
+    .board-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 10 / 5.6;
+      min-height: 310px;
+      max-height: 540px;
+      border-radius: 1rem;
+      overflow: hidden;
+      background: linear-gradient(145deg, #0f172a 0%, #091224 100%);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 20px 50px -12px rgba(2, 6, 23, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      grid-template-rows: repeat(5, minmax(0, 1fr));
+      width: 100%;
+      height: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    .board-tile {
+      position: relative;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      padding: 0.2rem 0.28rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.15s ease, background-color 0.2s ease;
+      user-select: none;
+    }
+
+    .tile-even {
+      background-color: rgba(15, 23, 42, 0.72);
+    }
+
+    .tile-odd {
+      background-color: rgba(30, 41, 59, 0.58);
+    }
+
+    .tile-ladder {
+      background: radial-gradient(circle at top right, rgba(16, 185, 129, 0.24), rgba(15, 23, 42, 0.78));
+      border-color: rgba(52, 211, 153, 0.35);
+    }
+
+    .tile-chute {
+      background: radial-gradient(circle at top right, rgba(244, 63, 94, 0.22), rgba(15, 23, 42, 0.78));
+      border-color: rgba(251, 113, 133, 0.35);
+    }
+
+    .tile-start {
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(16, 185, 129, 0.2));
+      border-color: rgba(34, 211, 238, 0.45);
+    }
+
+    .tile-goal {
+      background: linear-gradient(135deg, rgba(250, 204, 21, 0.28), rgba(16, 185, 129, 0.25));
+      border-color: rgba(250, 204, 21, 0.55);
+    }
+
+    #board-svg-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    #tokens-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .player-token {
+      position: absolute;
+      width: clamp(22px, 3.2vw, 34px);
+      height: clamp(22px, 3.2vw, 34px);
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(11px, 1.6vw, 16px);
+      font-weight: 800;
+      color: #ffffff;
+      border: 2px solid #ffffff;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.65);
+      transform: translate(-50%, -50%);
+      transition: left 0.28s cubic-bezier(0.22, 1, 0.36, 1), top 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .token-active-ring {
+      animation: pulseRing 1.3s infinite;
+    }
+
+    @keyframes pulseRing {
+      0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.75), 0 6px 14px rgba(0,0,0,0.65); }
+      70% { box-shadow: 0 0 0 9px rgba(34, 211, 238, 0), 0 6px 14px rgba(0,0,0,0.65); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0), 0 6px 14px rgba(0,0,0,0.65); }
+    }
+
+    @keyframes diceTumble {
+      0% { transform: rotate(0deg) scale(1); }
+      25% { transform: rotate(-16deg) scale(1.12); }
+      50% { transform: rotate(14deg) scale(1.15); }
+      75% { transform: rotate(-8deg) scale(1.06); }
+      100% { transform: rotate(0deg) scale(1); }
+    }
+
+    .dice-rolling {
+      animation: diceTumble 0.45s ease-in-out infinite;
+    }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.45);
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-cyan-500/30 selection:text-cyan-200">
+
+  <!-- ==================== TOP NAVIGATION HEADER ==================== -->
+  <header class="border-b border-slate-800/90 bg-slate-950/90 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-teal-500 to-emerald-500 flex items-center justify-center text-xl shadow-lg shadow-cyan-950/60 shrink-0">
+          🧬
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-sm sm:text-lg font-extrabold tracking-tight bg-gradient-to-r from-cyan-300 via-emerald-300 to-teal-200 bg-clip-text text-transparent truncate">
+              BioLab Quest: Grade 8 Lab &amp; Genetics Edition
+            </h1>
+            <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+              Grade 8
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 truncate">
+            Apparatuses (A, B &amp; C) • Lab Safety • DNA Replication • Transcription &amp; Translation
+          </p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="openModal('modal-notes')" class="px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-emerald-300 transition flex items-center gap-1.5">
+          <span>📘</span>
+          <span class="hidden sm:inline">Grade 8 Reviewer</span>
+        </button>
+        <button onclick="openModal('modal-rules')" class="px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-1.5">
+          <span>🎲</span>
+          <span class="hidden sm:inline">How to Play</span>
+        </button>
+        <button onclick="openModal('modal-github')" class="px-3 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-xs font-bold text-cyan-300 transition flex items-center gap-1.5">
+          <span>🐙</span>
+          <span class="hidden sm:inline">GitHub Guide</span>
+        </button>
+        <button onclick="toggleSound()" id="btn-sound" title="Toggle Sound Effects" class="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-200 transition">
+          🔊
+        </button>
+        <button onclick="openSetupModal()" class="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-xs font-extrabold text-white shadow-md shadow-cyan-950/50 transition">
+          New Game
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN WORKSPACE ==================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+    <!-- LEFT / CENTER COLUMN: BOARD & CONTROLS (8 COLS ON LG) -->
+    <section class="lg:col-span-8 flex flex-col gap-3.5">
+
+      <!-- Status Banner & Focus Filter Bar -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span id="active-filter-badge" class="px-2.5 py-1 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-bold shrink-0">
+            All Grade 8 Topics
+          </span>
+          <p id="status-banner-text" class="text-xs sm:text-sm font-medium text-slate-200 truncate">
+            Roll the die to begin your Grade 8 Lab &amp; Genetics journey!
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <label for="topic-filter-select" class="text-xs font-semibold text-slate-400">Focus:</label>
+          <select id="topic-filter-select" onchange="changeTopicFilter(this.value)" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-100 text-xs font-semibold rounded-xl px-2.5 py-2 focus:outline-none focus:border-cyan-400 transition">
+            <option value="ALL">All Topics (Mixed)</option>
+            <option value="APPARATUS">Apparatuses (All A, B, C)</option>
+            <option value="APPARATUS_A">Apparatus A: Mass/Wt/Vol</option>
+            <option value="APPARATUS_B">Apparatus B: Functions</option>
+            <option value="APPARATUS_C">Apparatus C: Portable ID</option>
+            <option value="SAFETY">General Lab Safety</option>
+            <option value="REPLICATION">DNA Replication</option>
+            <option value="TRANSCRIPTION">Transcription / Translation</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Interactive 50-Tile Board -->
+      <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-2.5 sm:p-3.5 shadow-xl">
+        <div class="board-wrapper" id="board-wrapper">
+          <div class="board-grid" id="board-grid"></div>
+          <svg id="board-svg-overlay" viewBox="0 0 1000 560" preserveAspectRatio="none"></svg>
+          <div id="tokens-layer"></div>
+        </div>
+
+        <!-- Board Legend -->
+        <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-sm bg-emerald-500/30 border border-emerald-400 inline-block"></span>
+              <strong class="text-emerald-300">DNA Ladder:</strong> Answer right to climb!
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-sm bg-rose-500/30 border border-rose-400 inline-block"></span>
+              <strong class="text-rose-300">Lab Hazard Chute:</strong> Pass safety check or use Shield 🛡️!
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-sm bg-amber-400/30 border border-amber-300 inline-block"></span>
+              <strong class="text-amber-300">Tile 50:</strong> Lab &amp; Genetics Master!
+            </span>
+          </div>
+          <span class="text-slate-500 font-medium">Tiles 1 → 50</span>
+        </div>
+      </div>
+
+      <!-- Dice & Action Dock -->
+      <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-4 w-full sm:w-auto justify-center sm:justify-start">
+          <div id="dice-box" class="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-cyan-500/40 flex flex-col items-center justify-center shadow-inner select-none">
+            <span id="dice-face" class="text-3xl font-black text-cyan-300 leading-none">🎲</span>
+            <span id="dice-label" class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Ready</span>
+          </div>
+
+          <div class="text-left">
+            <div class="text-xs font-bold uppercase tracking-wider text-slate-400">Current Turn</div>
+            <div id="current-turn-name" class="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
+              <span>Player 1</span>
+            </div>
+            <div id="current-turn-sub" class="text-xs text-slate-400">
+              Roll to advance along the board
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2.5 w-full sm:w-auto justify-center sm:justify-end">
+          <button id="btn-roll" onclick="handleRollClick()" class="flex-1 sm:flex-initial px-6 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 font-extrabold text-sm shadow-lg shadow-cyan-950/60 transition active:scale-[0.98]">
+            🎲 Roll Die
+          </button>
+          <button onclick="openModal('modal-notes')" class="px-4 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-300 font-bold text-xs sm:text-sm transition">
+            📘 Quick Notes
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: PLAYERS, MASTERY & LAB LOG (4 COLS ON LG) -->
+    <aside class="lg:col-span-4 flex flex-col gap-3.5 w-full">
+
+      <!-- Players Standings Card -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-300">Players &amp; Safety Shields</h2>
+          <span id="round-counter" class="text-xs font-bold text-cyan-400">Turn #1</span>
+        </div>
+        <div id="players-list" class="space-y-2.5"></div>
+      </div>
+
+      <!-- Grade 8 Topic Mastery Tracker -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-2.5">
+          <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-300">Grade 8 Topic Mastery</h2>
+          <span id="overall-accuracy" class="text-xs font-bold text-emerald-400">0% Accuracy</span>
+        </div>
+        <div id="mastery-bars" class="space-y-2.5 text-xs"></div>
+      </div>
+
+      <!-- Live Lab Activity Log -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-300">Lab Logbook</h2>
+          <span class="text-[10px] text-slate-500 uppercase font-semibold">Live Feed</span>
+        </div>
+        <div id="activity-log" class="h-40 overflow-y-auto space-y-1.5 pr-1 text-xs text-slate-300"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="border-t border-slate-800/80 bg-slate-950/90 py-3 px-4 text-center text-xs text-slate-500 mt-auto">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span>BioLab Quest: Grade 8 Lab &amp; Genetics Edition • Single-File HTML Game</span>
+      <button onclick="openModal('modal-github')" class="text-cyan-400 hover:underline font-medium">
+        Host Free on GitHub Pages →
+      </button>
+    </div>
+  </footer>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: GAME SETUP MODAL                                             -->
+  <!-- ===================================================================== -->
+  <div id="modal-setup" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-extrabold bg-gradient-to-r from-cyan-300 to-emerald-300 bg-clip-text text-transparent">
+          🧬 Start BioLab Quest (Grade 8)
+        </h2>
+        <button onclick="closeModal('modal-setup')" class="text-slate-400 hover:text-white text-lg px-2 py-1">✕</button>
+      </div>
+      <p class="text-xs text-slate-400 mb-4">
+        Choose your game mode and Grade 8 Science topic focus. Answer questions correctly to climb DNA ladders and stay safe in the lab!
+      </p>
+
+      <!-- Mode Selection -->
+      <div class="mb-4">
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Game Mode</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="mode-btn-bot" onclick="selectSetupMode('BOT')" class="p-2.5 rounded-xl border text-left transition bg-cyan-500/15 border-cyan-400 text-white">
+            <div class="text-xs font-extrabold">🤖 Solo vs Lab Bot</div>
+            <div class="text-[11px] text-slate-300">Practice on your own</div>
+          </button>
+          <button type="button" id="mode-btn-multi" onclick="selectSetupMode('MULTI')" class="p-2.5 rounded-xl border text-left transition bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500">
+            <div class="text-xs font-extrabold">👥 2–4 Players</div>
+            <div class="text-[11px] text-slate-400">Pass &amp; play with friends</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Player Count (Shown in MULTI mode) -->
+      <div id="setup-player-count-wrap" class="mb-4 hidden">
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Number of Players</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" onclick="setPlayerCount(2)" id="pcount-2" class="py-2 rounded-xl border text-xs font-bold bg-cyan-500/20 border-cyan-400 text-cyan-200">2 Players</button>
+          <button type="button" onclick="setPlayerCount(3)" id="pcount-3" class="py-2 rounded-xl border text-xs font-bold bg-slate-800 border-slate-700 text-slate-300">3 Players</button>
+          <button type="button" onclick="setPlayerCount(4)" id="pcount-4" class="py-2 rounded-xl border text-xs font-bold bg-slate-800 border-slate-700 text-slate-300">4 Players</button>
+        </div>
+      </div>
+
+      <!-- Player Name Input -->
+      <div class="mb-4">
+        <label for="setup-p1-name" class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Your Name (Player 1)</label>
+        <input id="setup-p1-name" type="text" maxlength="16" value="Grade 8 Scientist" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400" />
+      </div>
+
+      <!-- Topic Module Selection -->
+      <div class="mb-5">
+        <label for="setup-topic-select" class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Grade 8 Topic Focus</label>
+        <select id="setup-topic-select" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400">
+          <option value="ALL">All Topics (Apparatuses, Safety, Replication &amp; Transcription/Translation)</option>
+          <option value="APPARATUS">Laboratory Apparatuses (All A, B &amp; C)</option>
+          <option value="APPARATUS_A">Apparatuses A: Mass / Weight / Volume</option>
+          <option value="APPARATUS_B">Apparatuses B: Functions</option>
+          <option value="APPARATUS_C">Apparatuses C: Identifying Portable Tools</option>
+          <option value="SAFETY">General Lab Safety (Lecture Notes)</option>
+          <option value="REPLICATION">DNA Replication (Steps &amp; Enzymes)</option>
+          <option value="TRANSCRIPTION">Transcription / Translation</option>
+        </select>
+      </div>
+
+      <button onclick="startNewGameFromSetup()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold text-sm shadow-lg transition">
+        🚀 Start Quest
+      </button>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 2: QUESTION / CHALLENGE MODAL                                   -->
+  <!-- ===================================================================== -->
+  <div id="modal-question" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <span id="q-category-pill" class="px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+          Topic
+        </span>
+        <span id="q-context-pill" class="text-xs font-bold text-slate-400">
+          Challenge
+        </span>
+      </div>
+
+      <!-- Optional Inline SVG Diagram for Portable Apparatus Identification -->
+      <div id="q-svg-container" class="hidden my-3 p-3 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col items-center justify-center">
+        <div id="q-svg-box" class="w-28 h-28 sm:w-32 sm:h-32"></div>
+        <span class="text-[11px] text-slate-400 mt-1 font-medium">Portable Lab Apparatus Diagram</span>
+      </div>
+
+      <h3 id="q-prompt-text" class="text-sm sm:text-base font-bold text-white leading-snug mb-4">
+        Question prompt goes here...
+      </h3>
+
+      <div id="q-options-list" class="space-y-2.5 mb-4"></div>
+
+      <!-- Feedback Box (Shown after answering) -->
+      <div id="q-feedback-box" class="hidden rounded-xl p-3.5 border mb-4 text-xs sm:text-sm">
+        <div id="q-feedback-title" class="font-extrabold mb-1"></div>
+        <p id="q-feedback-explanation" class="text-slate-200 leading-relaxed text-xs sm:text-sm"></p>
+      </div>
+
+      <div class="flex justify-end">
+        <button id="q-continue-btn" onclick="finishQuestionTurn()" class="hidden px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition">
+          Continue →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 3: GRADE 8 QUICK REVIEWER NOTES (APPARATUSES + SAFETY + DNA)   -->
+  <!-- ===================================================================== -->
+  <div id="modal-notes" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-extrabold text-emerald-300">📘 Grade 8 Reviewer Cheat Sheet</h2>
+        <button onclick="closeModal('modal-notes')" class="text-slate-400 hover:text-white text-lg px-2 py-1">✕</button>
+      </div>
+
+      <div class="space-y-4 text-xs sm:text-sm text-slate-300">
+        <!-- Apparatuses -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5">
+          <h3 class="font-extrabold text-cyan-300 mb-1.5">1. Laboratory Apparatuses (Grade 8)</h3>
+          <ul class="list-disc list-inside space-y-1 text-xs text-slate-300">
+            <li><strong>A. Mass / Weight / Volume:</strong> Triple beam or digital balance measures <em>mass</em> (g); spring scale measures <em>weight/force</em> (N); graduated cylinder measures liquid <em>volume</em> accurately (read bottom of the <strong>meniscus at eye level</strong>); beakers &amp; Erlenmeyer flasks hold, mix, or estimate liquids roughly.</li>
+            <li><strong>B. Functions:</strong> Funnel pours liquids cleanly into narrow openings or holds filter paper; stirring rod mixes liquids; dropper/pipette transfers small drops; test tube &amp; evaporating dish hold/heat small samples.</li>
+            <li><strong>C. Portable Apparatuses:</strong> Graduated cylinder, Erlenmeyer flask, beaker, dropper/pipette, funnel, test tube, stirring rod, and evaporating dish.</li>
+          </ul>
+        </div>
+
+        <!-- Lab Safety from Slides -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5">
+          <h3 class="font-extrabold text-amber-300 mb-1.5">2. General Lab Safety (Your Lecture Slides)</h3>
+          <ul class="list-disc list-inside space-y-1 text-xs text-slate-300">
+            <li><strong>Protects:</strong> You, other lab workers, cleaners, visitors, and your work.</li>
+            <li><strong>Laws &amp; Risk Assessment:</strong> <em>Health Safety at Work etc Act 1974</em> (work safely, don't endanger others, don't misuse safety equipment; penalty up to 2 years prison &amp;/or unlimited fine), <em>Management of H&amp;S at Work Regs 1999</em>, <em>COSHH Regs 2004</em>. Steps: determine hazards &amp; evaluate risks, use relevant data, determine controls, document, agree with supervisor, and apply controls (with specific training).</li>
+            <li><strong>8 Control Measures (in order of preference):</strong> (1) Less risky substance; (2) Safer form (e.g., solution instead of powder); (3) Totally enclose (e.g., glove-box); (4) Partially enclose (e.g., fume cupboard); (5) Good general ventilation; (6) Safe systems of work; (7) Reduce exposure time, increase distance, reduce volumes; (8) PPE (last resort for primary protection).</li>
+            <li><strong>Protecting Yourself, Gloves &amp; Hygiene:</strong> No sandals/open shoes; tie long hair back; wear risk-assessment clothing/coats properly; match gloves to substance and remove before using instruments, telephone, or leaving lab. Never eat, drink, smoke, apply cosmetics, touch face/mouth/eyes, or chew pens/pencils; always wash hands before leaving and before eating.</li>
+            <li><strong>Hazards &amp; Symbols:</strong> Fire, glassware breakage, sharps, spillages, pressure/gas cylinders, heat &amp; cold extremes, chemical, biological, radiation; symbols include General Warning, Biohazard, Flammable, Explosive, Electrical, High Voltage, Toxic, Ionizing &amp; Non-Ionizing Radiation, Low Temp/Cold, Hot Surface/Burn, UV Light, Oxidizing, Corrosive, Glassware Breakage, Carcinogen/Cancer, and Irritant.</li>
+          </ul>
+        </div>
+
+        <!-- DNA & Protein Synthesis -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5">
+          <h3 class="font-extrabold text-emerald-300 mb-1.5">3. DNA Replication &amp; Transcription / Translation</h3>
+          <ul class="list-disc list-inside space-y-1 text-xs text-slate-300">
+            <li><strong>DNA Replication:</strong> Makes an identical DNA copy before cell division. Strands unzip/separate, and matching bases pair up: <strong>A ↔ T</strong> and <strong>C ↔ G</strong>.</li>
+            <li><strong>Transcription (in nucleus):</strong> DNA serves as a template to build <strong>mRNA</strong> (<strong>A → U</strong>, T → A, C → G, G → C; RNA uses <strong>Uracil [U]</strong> instead of Thymine).</li>
+            <li><strong>Translation (at ribosome):</strong> mRNA is read in 3-base <strong>codons</strong>, and <strong>tRNA</strong> brings matching amino acids to build a <strong>protein</strong>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-4 flex justify-end">
+        <button onclick="closeModal('modal-notes')" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">
+          Got It!
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 4: HOW TO PLAY                                                  -->
+  <!-- ===================================================================== -->
+  <div id="modal-rules" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-extrabold text-cyan-300">🎲 How to Play BioLab Quest</h2>
+        <button onclick="closeModal('modal-rules')" class="text-slate-400 hover:text-white text-lg px-2 py-1">✕</button>
+      </div>
+      <ol class="list-decimal list-inside space-y-2 text-xs sm:text-sm text-slate-300 mb-5">
+        <li><strong>Roll &amp; Move:</strong> Roll the die to advance along the 50-tile board toward Tile 50.</li>
+        <li><strong>DNA Ladders (Green):</strong> Land at the base of a ladder and answer a Grade 8 question correctly to climb up!</li>
+        <li><strong>Lab Hazard Chutes (Rose):</strong> Land on a hazard chute—if you have a <strong>Safety Shield 🛡️</strong>, it blocks the slide automatically; otherwise answer a Lab Safety question to stay safe or slide down!</li>
+        <li><strong>Earn Shields:</strong> Answering questions correctly helps you earn Safety Shields and build your Grade 8 mastery score.</li>
+      </ol>
+      <div class="flex justify-end">
+        <button onclick="closeModal('modal-rules')" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold">
+          Back to Board
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 5: GITHUB PAGES GUIDE                                           -->
+  <!-- ===================================================================== -->
+  <div id="modal-github" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-extrabold text-cyan-300">🐙 Put This on GitHub Pages</h2>
+        <button onclick="closeModal('modal-github')" class="text-slate-400 hover:text-white text-lg px-2 py-1">✕</button>
+      </div>
+      <p class="text-xs text-slate-300 mb-3">
+        This entire game is in one <code>index.html</code> file with custom SVG diagrams and built-in sound effects—no external assets required.
+      </p>
+      <ol class="list-decimal list-inside space-y-2 text-xs text-slate-300 bg-slate-950 p-4 rounded-xl border border-slate-800 mb-3">
+        <li>Create a new repository on <strong>GitHub</strong> (for example, <code>biolab-quest-grade8</code>).</li>
+        <li>Click <strong>Add file → Create new file</strong>, name it <strong><code>index.html</code></strong>, paste this code, and commit.</li>
+        <li>Open repository <strong>Settings → Pages</strong>.</li>
+        <li>Under <em>Branch</em>, select <strong><code>main</code></strong> and <strong><code>/ (root)</code></strong>, then click <strong>Save</strong>.</li>
+      </ol>
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-4">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Sample README.md</span>
+          <button type="button" onclick="copyReadmeText()" id="btn-copy-readme" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[11px] font-bold transition">
+            Copy README
+          </button>
+        </div>
+        <pre id="readme-snippet" class="text-[11px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed"># 🧬 BioLab Quest: Grade 8 Lab &amp; Genetics Edition
+A single-file Snakes &amp; Ladders web game for Grade 8 Science covering:
+- Laboratory Apparatuses (A. Mass/Weight/Volume, B. Functions, C. Identifying Portable Tools)
+- General Lab Safety (Risk Assessments, Control Measures, PPE &amp; Hygiene, Hazards &amp; Symbols)
+- DNA Replication &amp; Transcription / Translation</pre>
+      </div>
+      <div class="flex justify-end">
+        <button onclick="closeModal('modal-github')" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 6: VICTORY MODAL                                                -->
+  <!-- ===================================================================== -->
+  <div id="modal-victory" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-400/40 rounded-2xl max-w-md w-full p-6 text-center shadow-2xl">
+      <div class="text-5xl mb-2">🏆</div>
+      <h2 id="victory-title" class="text-xl font-extrabold text-amber-300 mb-1">Lab &amp; Genetics Master!</h2>
+      <p id="victory-subtitle" class="text-xs sm:text-sm text-slate-300 mb-5"></p>
+      <div class="flex items-center justify-center gap-3">
+        <button onclick="closeModal('modal-victory'); openSetupModal();" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition">
+          Play Again
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+  <script>
+    /**
+     * =========================================================================
+     * 1. WEB AUDIO API SOUND EFFECTS (NO EXTERNAL AUDIO URLS)
+     * =========================================================================
+     */
+    const SoundFX = {
+      enabled: true,
+      ctx: null,
+      ensureCtx() {
+        if (!this.enabled) return null;
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+        return this.ctx;
+      },
+      playTone(freq, duration = 0.12, type = 'sine', delay = 0, gainVal = 0.08) {
+        try {
+          const ctx = this.ensureCtx();
+          if (!ctx) return;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+          gain.gain.setValueAtTime(gainVal, ctx.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + delay);
+          osc.stop(ctx.currentTime + delay + duration);
+        } catch (err) {
+          // Ignore audio errors if blocked by browser policy
+        }
+      },
+      roll() {
+        this.playTone(260, 0.07, 'triangle', 0, 0.07);
+        this.playTone(340, 0.07, 'triangle', 0.07, 0.07);
+      },
+      step() {
+        this.playTone(520, 0.05, 'sine', 0, 0.05);
+      },
+      correct() {
+        this.playTone(523.25, 0.1, 'triangle', 0, 0.09);
+        this.playTone(659.25, 0.1, 'triangle', 0.09, 0.09);
+        this.playTone(783.99, 0.18, 'triangle', 0.18, 0.1);
+      },
+      wrong() {
+        this.playTone(240, 0.16, 'sawtooth', 0, 0.07);
+        this.playTone(185, 0.22, 'sawtooth', 0.14, 0.07);
+      },
+      ladder() {
+        this.playTone(440, 0.09, 'sine', 0, 0.09);
+        this.playTone(554.37, 0.09, 'sine', 0.08, 0.09);
+        this.playTone(659.25, 0.09, 'sine', 0.16, 0.09);
+        this.playTone(880, 0.2, 'sine', 0.24, 0.1);
+      },
+      chute() {
+        this.playTone(420, 0.12, 'sawtooth', 0, 0.07);
+        this.playTone(310, 0.12, 'sawtooth', 0.11, 0.07);
+        this.playTone(210, 0.2, 'sawtooth', 0.22, 0.07);
+      },
+      win() {
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((n, idx) => this.playTone(n, 0.16, 'triangle', idx * 0.12, 0.1));
+      }
+    };
+
+    function toggleSound() {
+      SoundFX.enabled = !SoundFX.enabled;
+      document.getElementById('btn-sound').textContent = SoundFX.enabled ? '🔊' : '🔇';
+    }
+
+    /**
+     * =========================================================================
+     * 2. CUSTOM INLINE SVG DIAGRAMS FOR PORTABLE LAB APPARATUSES (TOPIC C)
+     * =========================================================================
+     */
+    const PORTABLE_APPARATUS_SVGS = {
+      graduated_cylinder: `
+        <svg viewBox="0 0 120 120" class="w-full h-full">
+          <!-- Base -->
+          <ellipse cx="60" cy="108" rx="28" ry="6" fill="#64748b" stroke="#94a3b8" stroke-width="2"/>
+          <!-- Cylinder Body -->
+          <rect x="42" y="18" width="36" height="88" rx="4" fill="rgba(56,189,248,0.16)" stroke="#38bdf8" stroke-width="2.5"/>
+          <!-- Pour Spout -->
+          <path d="M42 18 L38 14 L44 14" fill="none" stroke="#38bdf8" stroke-width="2"/>
+          <!-- Liquid inside -->
+          <rect x="44" y="54" width="32" height="50" fill="rgba(6,182,212,0.45)"/>
+          <!-- Graduation Marks -->
+          <line x1="44" y1="32" x2="54" y2="32" stroke="#e2e8f0" stroke-width="1.8"/>
+          <line x1="44" y1="44" x2="51" y2="44" stroke="#cbd5e1" stroke-width="1.5"/>
+          <line x1="44" y1="56" x2="55" y2="56" stroke="#ffffff" stroke-width="2"/>
+          <line x1="44" y1="68" x2="51" y2="68" stroke="#cbd5e1" stroke-width="1.5"/>
+          <line x1="44" y1="80" x2="54" y2="80" stroke="#e2e8f0" stroke-width="1.8"/>
+          <line x1="44" y1="92" x2="51" y2="92" stroke="#cbd5e1" stroke-width="1.5"/>
+        </svg>`,
+
+      erlenmeyer_flask: `
+        <svg viewBox="0 0 120 120" class="w-full h-full">
+          <!-- Conical Body -->
+          <path d="M50 22 L70 22 L70 46 L98 98 C100 102, 97 106, 92 106 L28 106 C23 106, 20 102, 22 98 L50 46 Z" fill="rgba(56,189,248,0.16)" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round"/>
+          <!-- Liquid Inside -->
+          <path d="M36 72 L84 72 L95 98 C96 101, 94 104, 91 104 L29 104 C26 104, 24 101, 25 98 Z" fill="rgba(16,185,129,0.45)"/>
+          <!-- Neck Rim -->
+          <rect x="47" y="18" width="26" height="5" rx="2" fill="#94a3b8"/>
+        </svg>`,
+
+      beaker: `
+        <svg viewBox="0 0 120 120" class="w-full h-full">
+          <!-- Beaker Body -->
+          <path d="M28 24 L88 24 L88 100 C88 104, 85 106, 81 106 L35 106 C31 106, 28 104, 28 100 Z" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="2.5"/>
+          <!-- Spout -->
+          <path d="M28 24 L23 20 L29 20" fill="none" stroke="#38bdf8" stroke-width="2"/>
+          <!-- Liquid -->
+          <rect x="30" y="60" width="56" height="44" fill="rgba(59,130,246,0.4)"/>
+          <!-- Approximate Volume Lines -->
+          <line x1="68" y1="42" x2="86" y2="42" stroke="#cbd5e1" stroke-width="1.8"/>
+          <line x1="72" y1="58" x2="86" y2="58" stroke="#cbd5e1" stroke-width="1.8"/>
+          <line x1="68" y1="74" x2="86" y2="74" stroke="#cbd5e1" stroke-width="1.8"/>
+          <line x1="72" y1="90" x2="86" y2="90" stroke="#cbd5e1" stroke-width="1.8"/>
+        </svg>`,
+
+      dropper: `
+        <svg viewBox="0 0 120 120" class="w-full h-full">
+          <!-- Rubber Bulb -->
+          <path d="M48 16 C48 7, 72 7, 72 16 L74 35 L46 35 Z" fill="#f43f5e" stroke="#fda4af" stroke-width="2"/>
+          <!-- Collar -->
+          <rect x="45" y="34" width="30" height="7" rx="3" fill="#94a3b8"/>
+          <!-- Glass Tube -->
+          <path d="M51 41 L69 41 L64 86 L59 98 L56 86 Z" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="2.5"/>
+          <!-- Liquid -->
+          <path d="M53 62 L67 62 L63 86 L59 95 L57 86 Z" fill="#06b6d4"/>
+          <!-- Drop -->
+          <path d="M59 102 C59 102, 54 110, 59 113 C64 110, 59 102, 59 102 Z" fill="#22d3ee"/>
+        </svg>`,
+
+      funnel: `
+        <svg viewBox="0 0 120 120" class="w-full h-full">
+          <!-- Cone Top -->
+          <path d="M18 22 L102 22 L66 66 L54 66 Z" fill="rgba(56,189,248,0.18)" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round"/>
+          <!-- Narrow Stem -->
+          <rect x="55" y="66" width="10" height="38" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="2.5"/>
+          <!-- Liquid Flow -->
+          <path d="M44 42 L76 42 L63 66 L57 66 Z" fill="rgba(34,211,238,0.4)"/>
+        </svg>`,
+
+      test_tube: `
+        <svg viewBox="0 0 120 120" class="w-full h-full">
+          <!-- Flared Rim -->
+          <path d="M44 16 L76 16" stroke="#cbd5e1" stroke-width="3" stroke-linecap="round"/>
+          <!-- Tube with Rounded Bottom -->
+          <path d="M47 16 L73 16 L73 88 A13 13 0 0 1 47 88 Z" fill="rgba(56,189,248,0.16)" stroke="#38bdf8" stroke-width="2.5"/>
+          <!-- Sample Liquid -->
+          <path d="M49 56 L71 56 L71 88 A11 11 0 0 1 49 88 Z" fill="rgba(168,85,247,0.45)"/>
+        </svg>`,
+
+      stirring_rod: `
+        <svg viewBox="0 0 120 120" class="w-full h-full">
+          <!-- Diagonal Glass Rod -->
+          <line x1="24" y1="96" x2="96" y2="24" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
+          <line x1="26" y1="94" x2="94" y2="26" stroke="#e0f2fe" stroke-width="2.5" stroke-linecap="round"/>
+          <!-- Sparkle Dots -->
+          <circle cx="88" cy="18" r="2.5" fill="#fbbf24"/>
+          <circle cx="102" cy="34" r="2" fill="#34d399"/>
+        </svg>`,
+
+      evaporating_dish: `
+        <svg viewBox="0 0 120 120" class="w-full h-full">
+          <!-- Shallow Dish Body -->
+          <path d="M16 48 L104 48 C102 78, 84 92, 60 92 C36 92, 18 78, 16 48 Z" fill="rgba(226,232,240,0.22)" stroke="#cbd5e1" stroke-width="2.5" stroke-linejoin="round"/>
+          <!-- Rim Lip -->
+          <path d="M13 48 L107 48" stroke="#f8fafc" stroke-width="3" stroke-linecap="round"/>
+          <!-- Evaporation Wisps -->
+          <path d="M42 36 Q38 26 44 18" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+          <path d="M60 34 Q56 22 62 14" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round"/>
+          <path d="M78 36 Q74 26 80 18" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+        </svg>`
+    };
+
+    /**
+     * =========================================================================
+     * 3. GRADE 8 QUESTION BANK
+     *    - Apparatuses A (Mass/Weight/Volume), B (Functions), C (Portable ID)
+     *    - General Lab Safety (Strictly grounded in user's lecture slides)
+     *    - DNA Replication & Transcription/Translation (Grade 8 level)
+     * =========================================================================
+     */
+    const QUESTION_BANK = [
+      // -----------------------------------------------------------------------
+      // TOPIC 1A: LABORATORY APPARATUSES — MASS / WEIGHT / VOLUME
+      // -----------------------------------------------------------------------
+      {
+        id: 'app-a-1',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_A',
+        subtopic: 'Apparatus A: Mass / Weight / Volume',
+        prompt: 'Which laboratory apparatus is used to measure the MASS of an object in grams?',
+        options: [
+          'Triple beam balance or digital balance',
+          'Spring scale',
+          'Graduated cylinder',
+          'Funnel'
+        ],
+        answer: 0,
+        explanation: 'A triple beam balance or digital balance measures mass (amount of matter, usually in grams).'
+      },
+      {
+        id: 'app-a-2',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_A',
+        subtopic: 'Apparatus A: Mass / Weight / Volume',
+        prompt: 'Which tool is used to measure WEIGHT (or pulling force) using a spring?',
+        options: [
+          'Spring scale',
+          'Erlenmeyer flask',
+          'Stirring rod',
+          'Evaporating dish'
+        ],
+        answer: 0,
+        explanation: 'A spring scale measures weight or force as an object pulls on its hook and stretches the spring.'
+      },
+      {
+        id: 'app-a-3',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_A',
+        subtopic: 'Apparatus A: Mass / Weight / Volume',
+        prompt: 'Which apparatus should you choose when you need an ACCURATE measurement of liquid volume?',
+        options: [
+          'Graduated cylinder',
+          'Beaker',
+          'Test tube',
+          'Evaporating dish'
+        ],
+        answer: 0,
+        explanation: 'A graduated cylinder has clear volume markings designed for accurately measuring liquid volume.'
+      },
+      {
+        id: 'app-a-4',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_A',
+        subtopic: 'Apparatus A: Mass / Weight / Volume',
+        prompt: 'How should you read the curved liquid surface (meniscus) in a graduated cylinder?',
+        options: [
+          'At eye level, reading the bottom (lowest curve) of the meniscus',
+          'From above while holding it up high',
+          'At the very top edge touching the glass wall',
+          'By tilting the cylinder to one side'
+        ],
+        answer: 0,
+        explanation: 'Always read the bottom of the meniscus with your eyes level with the liquid surface for an accurate reading.'
+      },
+      {
+        id: 'app-a-5',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_A',
+        subtopic: 'Apparatus A: Mass / Weight / Volume',
+        prompt: 'What are a beaker and an Erlenmeyer flask mainly used for compared to a graduated cylinder?',
+        options: [
+          'Holding, mixing, or estimating liquids roughly rather than making precise volume measurements',
+          'Measuring mass in grams',
+          'Measuring weight with a hook',
+          'Grinding solid powders into fine dust'
+        ],
+        answer: 0,
+        explanation: 'Beakers and Erlenmeyer flasks are great for holding, mixing, and rough volume estimates, while graduated cylinders give more accurate volume readings.'
+      },
+
+      // -----------------------------------------------------------------------
+      // TOPIC 1B: LABORATORY APPARATUSES — FUNCTIONS
+      // -----------------------------------------------------------------------
+      {
+        id: 'app-b-1',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_B',
+        subtopic: 'Apparatus B: Functions',
+        prompt: 'Which apparatus is best for pouring liquids cleanly into a narrow opening or holding filter paper?',
+        options: [
+          'Funnel',
+          'Dropper',
+          'Stirring rod',
+          'Spring scale'
+        ],
+        answer: 0,
+        explanation: 'A funnel helps pour liquids into narrow openings without spilling and supports filter paper when separating mixtures.'
+      },
+      {
+        id: 'app-b-2',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_B',
+        subtopic: 'Apparatus B: Functions',
+        prompt: 'What is the main function of a stirring rod in a science activity?',
+        options: [
+          'Stirring and mixing liquids or dissolving solids evenly',
+          'Measuring liquid volume in milliliters',
+          'Measuring weight in Newtons',
+          'Holding a hot flask over a flame'
+        ],
+        answer: 0,
+        explanation: 'A stirring rod is used to stir mixtures and combine liquids or solids smoothly.'
+      },
+      {
+        id: 'app-b-3',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_B',
+        subtopic: 'Apparatus B: Functions',
+        prompt: 'Which portable apparatus is used to transfer small drops of liquid carefully?',
+        options: [
+          'Dropper (or pipette)',
+          'Beaker',
+          'Graduated cylinder',
+          'Funnel'
+        ],
+        answer: 0,
+        explanation: 'A dropper (or pipette) lets you add or transfer small drops of liquid with control.'
+      },
+      {
+        id: 'app-b-4',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_B',
+        subtopic: 'Apparatus B: Functions',
+        prompt: 'Which pair of apparatuses is commonly used to hold or heat small samples in Grade 8 lab activities?',
+        options: [
+          'Test tube and evaporating dish',
+          'Spring scale and funnel',
+          'Dropper and stirring rod',
+          'Triple beam balance and cylinder'
+        ],
+        answer: 0,
+        explanation: 'Test tubes hold small liquid or solid samples, and evaporating dishes hold small samples/solutions (including during evaporation or heating).'
+      },
+      {
+        id: 'app-b-5',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_B',
+        subtopic: 'Apparatus B: Functions',
+        prompt: 'Why is an Erlenmeyer flask helpful when swirling a liquid mixture?',
+        options: [
+          'Its sloped sides and narrow neck help prevent splashing while swirling',
+          'It has a hook for weighing objects',
+          'It is shaped like a long narrow tube',
+          'It is a flat rod for stirring'
+        ],
+        answer: 0,
+        explanation: 'An Erlenmeyer flask has a wide base and narrow neck that make swirling liquids easier with less splashing.'
+      },
+
+      // -----------------------------------------------------------------------
+      // TOPIC 1C: IDENTIFYING PORTABLE APPARATUSES (WITH INLINE SVGS)
+      // -----------------------------------------------------------------------
+      {
+        id: 'app-c-1',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_C',
+        subtopic: 'Apparatus C: Identifying Portable Tools',
+        svgKey: 'graduated_cylinder',
+        prompt: 'Identify this portable apparatus shown in the diagram:',
+        options: ['Graduated cylinder', 'Test tube', 'Funnel', 'Stirring rod'],
+        answer: 0,
+        explanation: 'This tall, marked tube with a base is a graduated cylinder, used for measuring liquid volume.'
+      },
+      {
+        id: 'app-c-2',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_C',
+        subtopic: 'Apparatus C: Identifying Portable Tools',
+        svgKey: 'erlenmeyer_flask',
+        prompt: 'Identify this cone-shaped flask shown in the diagram:',
+        options: ['Erlenmeyer flask', 'Beaker', 'Evaporating dish', 'Dropper'],
+        answer: 0,
+        explanation: 'This cone-shaped flask with a narrow neck is an Erlenmeyer flask.'
+      },
+      {
+        id: 'app-c-3',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_C',
+        subtopic: 'Apparatus C: Identifying Portable Tools',
+        svgKey: 'beaker',
+        prompt: 'Identify this straight-sided portable container shown in the diagram:',
+        options: ['Beaker', 'Graduated cylinder', 'Dropper', 'Funnel'],
+        answer: 0,
+        explanation: 'This container with straight sides and a small pouring lip is a beaker.'
+      },
+      {
+        id: 'app-c-4',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_C',
+        subtopic: 'Apparatus C: Identifying Portable Tools',
+        svgKey: 'dropper',
+        prompt: 'Identify this portable liquid-dropping tool shown in the diagram:',
+        options: ['Dropper (pipette)', 'Stirring rod', 'Test tube', 'Evaporating dish'],
+        answer: 0,
+        explanation: 'This squeezable bulb and narrow tip is a dropper (pipette) for transferring small drops of liquid.'
+      },
+      {
+        id: 'app-c-5',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_C',
+        subtopic: 'Apparatus C: Identifying Portable Tools',
+        svgKey: 'funnel',
+        prompt: 'Identify this wide-topped, narrow-stemmed apparatus shown in the diagram:',
+        options: ['Funnel', 'Beaker', 'Erlenmeyer flask', 'Test tube'],
+        answer: 0,
+        explanation: 'This wide cone with a narrow stem is a funnel, used for pouring liquids cleanly or holding filter paper.'
+      },
+      {
+        id: 'app-c-6',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_C',
+        subtopic: 'Apparatus C: Identifying Portable Tools',
+        svgKey: 'test_tube',
+        prompt: 'Identify this finger-sized tube with a rounded bottom shown in the diagram:',
+        options: ['Test tube', 'Graduated cylinder', 'Funnel', 'Stirring rod'],
+        answer: 0,
+        explanation: 'This small tube with a rounded bottom is a test tube, used for holding or testing small samples.'
+      },
+      {
+        id: 'app-c-7',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_C',
+        subtopic: 'Apparatus C: Identifying Portable Tools',
+        svgKey: 'stirring_rod',
+        prompt: 'Identify this straight rod shown in the diagram:',
+        options: ['Stirring rod', 'Dropper', 'Beaker', 'Evaporating dish'],
+        answer: 0,
+        explanation: 'This rod is a stirring rod, used to stir mixtures evenly.'
+      },
+      {
+        id: 'app-c-8',
+        category: 'APPARATUS',
+        subCategory: 'APPARATUS_C',
+        subtopic: 'Apparatus C: Identifying Portable Tools',
+        svgKey: 'evaporating_dish',
+        prompt: 'Identify this shallow dish shown in the diagram:',
+        options: ['Evaporating dish', 'Erlenmeyer flask', 'Graduated cylinder', 'Test tube'],
+        answer: 0,
+        explanation: 'This wide, shallow dish is an evaporating dish, used to hold small samples or allow liquids to evaporate.'
+      },
+
+      // -----------------------------------------------------------------------
+      // TOPIC 2: GENERAL LAB SAFETY (GROUNDED IN USER'S LECTURE SLIDES)
+      // -----------------------------------------------------------------------
+      {
+        id: 'saf-1',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Why It Matters',
+        prompt: 'According to your lab safety slides, who does safe working in a laboratory protect?',
+        options: [
+          'You, other lab workers, cleaners, visitors, and your work',
+          'Only the person doing the experiment',
+          'Only the teacher and lab technician',
+          'Only visitors who walk through the room'
+        ],
+        answer: 0,
+        explanation: 'Safe working protects you, other lab workers, cleaners, visitors, and your work.'
+      },
+      {
+        id: 'saf-2',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Laws & Penalties',
+        prompt: 'Under the Health Safety at Work etc Act 1974 in your slides, what is required and what is the maximum penalty mentioned?',
+        options: [
+          'Work safely, do not endanger others, do not misuse safety equipment; up to 2 years in prison &/or an unlimited fine',
+          'Only wear goggles; no penalty applies in a lab',
+          'Only cleaners must follow rules; small fixed parking fine',
+          'Work as fast as possible; 1 week detention'
+        ],
+        answer: 0,
+        explanation: 'The Act requires you to work safely, not endanger others, and not misuse safety equipment, with penalties of up to 2 years in prison &/or an unlimited fine.'
+      },
+      {
+        id: 'saf-3',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Laws & Risk Assessment',
+        prompt: 'Which laws/regulations and requirement are listed on the "What does the law say? (2)" slide?',
+        options: [
+          'Management of Health and Safety at Work Regs 1999, Control of Substances Hazardous to Health Regs 2004, and performing RISK ASSESSMENTS',
+          'Clean Air Act only and skipping risk assessments',
+          'Fire Code 1950 only and guessing hazards',
+          'Food Safety Act only and eating snacks in lab'
+        ],
+        answer: 0,
+        explanation: 'The slide highlights The Management of Health and Safety at Work Regs 1999, Control of Substances Hazardous to Health Regs 2004, and performing RISK ASSESSMENTS.'
+      },
+      {
+        id: 'saf-4',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Doing a Risk Assessment',
+        prompt: 'Which sequence matches "How to do a Risk Assessment?" in your lecture slides?',
+        options: [
+          'Determine hazards & evaluate risks, use relevant data, determine controls, document, agree with supervisor, and use those control measures (with specific training)',
+          'Start mixing first, ignore data, and ask a friend later',
+          'Only write a title and skip control measures',
+          'Use maximum chemical volume before checking hazards'
+        ],
+        answer: 0,
+        explanation: 'A risk assessment involves determining hazards & evaluating risks, using relevant data, determining controls, documenting, agreeing with your supervisor, and using controls (with specific training).'
+      },
+      {
+        id: 'saf-5',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Control Measures (1–8)',
+        prompt: 'In the Control Measures list (in order of preference), which options come BEFORE Personal Protective Equipment (PPE, #8)?',
+        options: [
+          '1. Less risky substance, 2. Safer form (e.g., solution vs powder), 3. Totally enclose (glove-box), 4. Partially enclose (fume cupboard), 5. Good ventilation, 6. Safe systems of work, 7. Reduce exposure/distance/volume',
+          'PPE is always #1 before everything else',
+          'There is no order of preference in control measures',
+          'Using powders instead of solutions is #1'
+        ],
+        answer: 0,
+        explanation: 'Slides 15–18 list preferences 1 through 7 before #8: Personal protective equipment (as a last resort for primary protection).'
+      },
+      {
+        id: 'saf-6',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Control Measures (1–8)',
+        prompt: 'In your Control Measures slides, what is #2 (a safer form of a substance) and what is #8 (primary protection)?',
+        options: [
+          '#2 is using a safer form (e.g., solution instead of powder); #8 is Personal protective equipment (as a last resort for primary protection)',
+          '#2 is wearing gloves; #8 is using a powder instead of a solution',
+          '#2 is opening windows; #8 is using a glove-box',
+          '#2 is increasing volume; #8 is reducing distance'
+        ],
+        answer: 0,
+        explanation: 'Preference #2 is using a safer form (like a solution instead of a powder), and #8 is PPE as a last resort for primary protection.'
+      },
+      {
+        id: 'saf-7',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Protecting Yourself & Gloves',
+        prompt: 'Under "Protecting yourself" and "Protecting yourself - gloves", which rule is true?',
+        options: [
+          'Do not wear sandals/open shoes, tie long hair back, wear risk-assessment clothing/lab coats properly, pick chemical gloves for the substance, and remove gloves before using instruments, telephone, or leaving the lab',
+          'Wear open sandals in summer, leave long hair loose, and keep chemical gloves on when answering the telephone',
+          'Any glove works for every chemical and never needs to be removed',
+          'Lab coats should be left off during risk-assessed tasks'
+        ],
+        answer: 0,
+        explanation: 'Avoid sandals/open shoes, tie long hair back, wear protective clothing/coats from your risk assessment, choose gloves suited to the substance, and take gloves off before using instruments/telephone or leaving the lab.'
+      },
+      {
+        id: 'saf-8',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Laboratory Hygiene',
+        prompt: 'According to the "Laboratory hygiene" slide, which habits are strictly prohibited in the lab?',
+        options: [
+          'Never eat, drink, or smoke; never apply cosmetics; never touch your face, mouth, or eyes; never suck pens or chew pencils (and always wash hands before leaving/eating)',
+          'Chewing pencils is fine as long as you do not drink soda',
+          'Applying lip balm is allowed at your bench',
+          'Washing hands is only needed once a week'
+        ],
+        answer: 0,
+        explanation: 'Lab hygiene rules say never eat, drink, or smoke, never apply cosmetics, never touch face/mouth/eyes, never suck pens or chew pencils, and always wash hands before leaving and especially before eating.'
+      },
+      {
+        id: 'saf-9',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: General Hazards',
+        prompt: 'Which item is listed under "What are the general hazards in a laboratory?" in your slides?',
+        options: [
+          'Fire, glassware breakage, sharps, spillages, pressure equipment & gas cylinders, heat/cold extremes, chemical/biological hazards, and radiation',
+          'Only paper cuts and slow Wi-Fi',
+          'Only loud music and bright chalkboards',
+          'None of these exist in a laboratory'
+        ],
+        answer: 0,
+        explanation: 'The slide lists fire, breakage of glassware, sharps, spillages, pressure equipment & gas cylinders, extremes of heat & cold, chemical hazards, biological hazards, and radiation.'
+      },
+      {
+        id: 'saf-10',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Safety Symbols',
+        prompt: 'In your Laboratory Safety Symbols slides, what do the Biohazard, Corrosive Material Hazard, and Carcinogen Hazard symbols mean?',
+        options: [
+          'Biohazard = Biological Hazard; Corrosive = Caustic Chemicals; Carcinogen = Cancer Risk',
+          'Biohazard = Cold Hazard; Corrosive = UV Light; Carcinogen = Electrical Shock',
+          'Biohazard = High Voltage; Corrosive = Cold Hazard; Carcinogen = Glassware Breakage',
+          'Biohazard = Non-Ionizing Radiation; Corrosive = Low Temp; Carcinogen = Irritant'
+        ],
+        answer: 0,
+        explanation: 'From the symbol charts: Biohazard is Biological Hazard, Corrosive Material Hazard is Caustic Chemicals, and Carcinogen Hazard is Cancer Risk.'
+      },
+      {
+        id: 'saf-11',
+        category: 'SAFETY',
+        subtopic: 'General Lab Safety: Safety Symbols',
+        prompt: 'Which pair of symbols from your lecture slides matches "Glassware Hazard" and "Hot Surface Hazard"?',
+        options: [
+          'Glassware Hazard = Breakage Risk; Hot Surface Hazard = Burn Hazard',
+          'Glassware Hazard = Cancer Risk; Hot Surface Hazard = Cold Hazard',
+          'Glassware Hazard = Poisonous Materials; Hot Surface Hazard = Radioactivity',
+          'Glassware Hazard = Electromagnetic Radiation; Hot Surface Hazard = Irritant'
+        ],
+        answer: 0,
+        explanation: 'The symbol chart labels Glassware Hazard as Breakage Risk and Hot Surface Hazard as Burn Hazard.'
+      },
+
+      // -----------------------------------------------------------------------
+      // TOPIC 3: DNA REPLICATION (STEPS / ENZYMES — GRADE 8 LEVEL)
+      // -----------------------------------------------------------------------
+      {
+        id: 'rep-1',
+        category: 'REPLICATION',
+        subtopic: 'DNA Replication: Purpose & Steps',
+        prompt: 'Why does a cell do DNA replication before it divides?',
+        options: [
+          'To make an identical copy of its DNA so each new cell gets a complete set of instructions',
+          'To turn DNA into a carbohydrate for energy',
+          'To shrink the nucleus to zero size',
+          'To replace water inside the cell'
+        ],
+        answer: 0,
+        explanation: 'Before a cell divides, DNA replication makes an identical copy so each new cell receives the full set of DNA instructions.'
+      },
+      {
+        id: 'rep-2',
+        category: 'REPLICATION',
+        subtopic: 'DNA Replication: Base Pairing',
+        prompt: 'In DNA base pairing, which bases pair together across the two strands?',
+        options: [
+          'Adenine (A) pairs with Thymine (T), and Cytosine (C) pairs with Guanine (G)',
+          'Adenine (A) pairs with Cytosine (C), and Thymine (T) pairs with Guanine (G)',
+          'Adenine (A) pairs with Guanine (G) only',
+          'All four bases pair randomly'
+        ],
+        answer: 0,
+        explanation: 'In DNA, A pairs with T and C pairs with G.'
+      },
+      {
+        id: 'rep-3',
+        category: 'REPLICATION',
+        subtopic: 'DNA Replication: Complementary Strand',
+        prompt: 'If one DNA strand has the base sequence A - T - C - G - A, what is the matching complementary DNA strand?',
+        options: [
+          'T - A - G - C - T',
+          'U - A - G - C - U',
+          'A - T - C - G - A',
+          'G - C - T - A - G'
+        ],
+        answer: 0,
+        explanation: 'Using A–T and C–G pairing: A→T, T→A, C→G, G→C, A→T, giving T - A - G - C - T.'
+      },
+      {
+        id: 'rep-4',
+        category: 'REPLICATION',
+        subtopic: 'DNA Replication: Unzipping & Building',
+        prompt: 'In simple Grade 8 terms, what happens when DNA replicates?',
+        options: [
+          'The two DNA strands separate/unzip, and matching nucleotides are added to build two identical DNA molecules',
+          'DNA turns into mRNA and leaves the nucleus to become a ribosome',
+          'Amino acids join together into a long protein chain',
+          'DNA breaks down and is never copied'
+        ],
+        answer: 0,
+        explanation: 'During replication, the DNA strands separate so matching bases can pair up and build two identical DNA double strands.'
+      },
+
+      // -----------------------------------------------------------------------
+      // TOPIC 4: TRANSCRIPTION / TRANSLATION (GRADE 8 LEVEL)
+      // -----------------------------------------------------------------------
+      {
+        id: 'trn-1',
+        category: 'TRANSCRIPTION',
+        subtopic: 'Transcription: DNA to mRNA',
+        prompt: 'What is the main job of mRNA during transcription?',
+        options: [
+          'Carrying genetic instructions/code copied from DNA out to build proteins',
+          'Breaking down glassware in the lab',
+          'Measuring liquid volume in milliliters',
+          'Storing fat droplets in the cell wall'
+        ],
+        answer: 0,
+        explanation: 'mRNA (messenger RNA) copies instructions from DNA and carries that message to where proteins are made.'
+      },
+      {
+        id: 'trn-2',
+        category: 'TRANSCRIPTION',
+        subtopic: 'Transcription: RNA Base Pairing',
+        prompt: 'When mRNA is made from a DNA template, which base does RNA use instead of Thymine (T) to pair with Adenine (A)?',
+        options: [
+          'Uracil (U)',
+          'Guanine (G)',
+          'Cytosine (C)',
+          'Thymine (T)'
+        ],
+        answer: 0,
+        explanation: 'In RNA, Uracil (U) pairs with Adenine (A) instead of Thymine (T).'
+      },
+      {
+        id: 'trn-3',
+        category: 'TRANSCRIPTION',
+        subtopic: 'Transcription: mRNA Sequence',
+        prompt: 'If a DNA template reads T - A - C - G, what mRNA sequence is formed during transcription?',
+        options: [
+          'A - U - G - C',
+          'T - A - C - G',
+          'U - A - G - C',
+          'G - C - A - T'
+        ],
+        answer: 0,
+        explanation: 'DNA T pairs with mRNA A, DNA A pairs with mRNA U, DNA C pairs with mRNA G, and DNA G pairs with mRNA C → A - U - G - C.'
+      },
+      {
+        id: 'trn-4',
+        category: 'TRANSCRIPTION',
+        subtopic: 'Translation: Ribosomes, tRNA & Codons',
+        prompt: 'During translation, how do ribosomes, codons, and tRNA work together to make a protein?',
+        options: [
+          'Ribosomes read mRNA in 3-base codons while tRNA brings matching amino acids to link into a protein',
+          'Ribosomes copy DNA into new DNA strands',
+          'tRNA unzips the cell membrane',
+          'Codons are 10-letter words made of sugar'
+        ],
+        answer: 0,
+        explanation: 'At the ribosome, mRNA is read in 3-base codons and tRNA brings the matching amino acids to build a protein chain.'
+      }
+    ];
+
+    /**
+     * =========================================================================
+     * 4. BOARD CONFIGURATION (50 TILES, LADDERS & SAFETY CHUTES)
+     * =========================================================================
+     */
+    const TOTAL_TILES = 50;
+
+    // Ladders: start -> higher tile (answer right to climb)
+    const LADDERS = {
+      3: 14,
+      8: 27,
+      19: 38,
+      29: 46,
+      34: 49
+    };
+
+    // Chutes: start -> lower tile (safety check or shield protects you)
+    const CHUTES = {
+      16: 5,
+      24: 11,
+      36: 21,
+      44: 28,
+      48: 31
+    };
+
+    const PLAYER_COLORS = ['#06b6d4', '#f43f5e', '#f59e0b', '#a855f7'];
+    const PLAYER_ICONS = ['🧪', '🔬', '🧬', '🧫'];
+
+    /**
+     * =========================================================================
+     * 5. GAME STATE
+     * =========================================================================
+     */
+    const gameState = {
+      mode: 'BOT', // 'BOT' or 'MULTI'
+      playerCount: 2,
+      topicFilter: 'ALL',
+      players: [],
+      currentPlayerIndex: 0,
+      turnNumber: 1,
+      isAnimating: false,
+      awaitingQuestion: false,
+      pendingQuestion: null,
+      pendingContext: null, // 'NORMAL' | 'LADDER' | 'CHUTE'
+      pendingTargetTile: null,
+      pendingBaseTile: null,
+      stats: {
+        APPARATUS: { right: 0, total: 0 },
+        SAFETY: { right: 0, total: 0 },
+        REPLICATION: { right: 0, total: 0 },
+        TRANSCRIPTION: { right: 0, total: 0 }
+      }
+    };
+
+    /**
+     * =========================================================================
+     * 6. BOARD GEOMETRY & RENDERING
+     * =========================================================================
+     */
+    // Converts tile number (1..50) into { rowFromTop (0..4), col (0..9) }
+    // Row 0 at bottom is tiles 1..10 (left-to-right), Row 1 is 11..20 (right-to-left), etc.
+    function getTileRowCol(tileNum) {
+      const idx = tileNum - 1;
+      const rowFromBottom = Math.floor(idx / 10); // 0 to 4
+      const posInRow = idx % 10; // 0 to 9
+      const col = rowFromBottom % 2 === 0 ? posInRow : 9 - posInRow;
+      const rowFromTop = 4 - rowFromBottom; // 0 (top) to 4 (bottom)
+      return { rowFromTop, col, rowFromBottom };
+    }
+
+    // Percentage coordinates (0..100) for token placement
+    function getTilePercentCenter(tileNum) {
+      if (tileNum <= 0) {
+        return { x: 4, y: 90 };
+      }
+      const { rowFromTop, col } = getTileRowCol(tileNum);
+      const x = (col + 0.5) * 10;
+      const y = (rowFromTop + 0.5) * 20;
+      return { x, y };
+    }
+
+    // SVG viewBox (1000 x 560) coordinates for ladders and chutes
+    function getTileSvgCenter(tileNum) {
+      const { rowFromTop, col } = getTileRowCol(tileNum);
+      return {
+        x: (col + 0.5) * 100,
+        y: (rowFromTop + 0.5) * 112
+      };
+    }
+
+    function buildBoardGrid() {
+      const gridEl = document.getElementById('board-grid');
+      gridEl.innerHTML = '';
+
+      for (let rTop = 0; rTop < 5; rTop++) {
+        const rowFromBottom = 4 - rTop;
+        for (let c = 0; c < 10; c++) {
+          const posInRow = rowFromBottom % 2 === 0 ? c : 9 - c;
+          const tileNum = rowFromBottom * 10 + posInRow + 1;
+
+          const tileDiv = document.createElement('div');
+          tileDiv.id = `tile-${tileNum}`;
+          tileDiv.className = 'board-tile ' + ((tileNum % 2 === 0) ? 'tile-even' : 'tile-odd');
+
+          if (tileNum === 1) tileDiv.classList.add('tile-start');
+          if (tileNum === TOTAL_TILES) tileDiv.classList.add('tile-goal');
+          if (LADDERS[tileNum]) tileDiv.classList.add('tile-ladder');
+          if (CHUTES[tileNum]) tileDiv.classList.add('tile-chute');
+
+          let badgeHtml = '';
+          if (tileNum === 1) {
+            badgeHtml = `<span class="text-[9px] sm:text-[10px] font-extrabold text-cyan-300 leading-none">START</span>`;
+          } else if (tileNum === TOTAL_TILES) {
+            badgeHtml = `<span class="text-[9px] sm:text-[10px] font-extrabold text-amber-300 leading-none">🏆 GOAL</span>`;
+          } else if (LADDERS[tileNum]) {
+            badgeHtml = `<span class="text-[9px] sm:text-[10px] font-extrabold text-emerald-300 leading-none">🧬↑${LADDERS[tileNum]}</span>`;
+          } else if (CHUTES[tileNum]) {
+            badgeHtml = `<span class="text-[9px] sm:text-[10px] font-extrabold text-rose-300 leading-none">⚠️↓${CHUTES[tileNum]}</span>`;
+          }
+
+          tileDiv.innerHTML = `
+            <span class="text-[10px] sm:text-xs font-bold text-slate-400 leading-none">${tileNum}</span>
+            <div class="flex justify-end">${badgeHtml}</div>
+          `;
+
+          gridEl.appendChild(tileDiv);
+        }
+      }
+
+      drawLaddersAndChutesSvg();
+      renderTokens();
+    }
+
+    function drawLaddersAndChutesSvg() {
+      const svg = document.getElementById('board-svg-overlay');
+      svg.innerHTML = '';
+
+      // Draw DNA Double-Helix Ladders
+      Object.entries(LADDERS).forEach(([fromStr, toStr]) => {
+        const start = getTileSvgCenter(Number(fromStr));
+        const end = getTileSvgCenter(Number(toStr));
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const len = Math.hypot(dx, dy) || 1;
+        // Perpendicular unit vector
+        const nx = -dy / len;
+        const ny = dx / len;
+        const halfWidth = 13;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('opacity', '0.88');
+
+        // Left & right rails
+        const r1x1 = start.x + nx * halfWidth, r1y1 = start.y + ny * halfWidth;
+        const r1x2 = end.x + nx * halfWidth, r1y2 = end.y + ny * halfWidth;
+        const r2x1 = start.x - nx * halfWidth, r2y1 = start.y - ny * halfWidth;
+        const r2x2 = end.x - nx * halfWidth, r2y2 = end.y - ny * halfWidth;
+
+        const rail1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        rail1.setAttribute('x1', r1x1); rail1.setAttribute('y1', r1y1);
+        rail1.setAttribute('x2', r1x2); rail1.setAttribute('y2', r1y2);
+        rail1.setAttribute('stroke', '#34d399');
+        rail1.setAttribute('stroke-width', '4');
+        rail1.setAttribute('stroke-linecap', 'round');
+
+        const rail2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        rail2.setAttribute('x1', r2x1); rail2.setAttribute('y1', r2y1);
+        rail2.setAttribute('x2', r2x2); rail2.setAttribute('y2', r2y2);
+        rail2.setAttribute('stroke', '#22d3ee');
+        rail2.setAttribute('stroke-width', '4');
+        rail2.setAttribute('stroke-linecap', 'round');
+
+        g.appendChild(rail1);
+        g.appendChild(rail2);
+
+        // Rungs
+        const steps = Math.max(3, Math.floor(len / 34));
+        for (let i = 1; i < steps; i++) {
+          const t = i / steps;
+          const cx = start.x + dx * t;
+          const cy = start.y + dy * t;
+          const rung = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          rung.setAttribute('x1', cx + nx * halfWidth);
+          rung.setAttribute('y1', cy + ny * halfWidth);
+          rung.setAttribute('x2', cx - nx * halfWidth);
+          rung.setAttribute('y2', cy - ny * halfWidth);
+          rung.setAttribute('stroke', '#a7f3d0');
+          rung.setAttribute('stroke-width', '2.5');
+          rung.setAttribute('stroke-linecap', 'round');
+          g.appendChild(rung);
+        }
+
+        svg.appendChild(g);
+      });
+
+      // Draw Lab Hazard Chutes
+      Object.entries(CHUTES).forEach(([fromStr, toStr]) => {
+        const start = getTileSvgCenter(Number(fromStr));
+        const end = getTileSvgCenter(Number(toStr));
+        const midX = (start.x + end.x) / 2 + 28;
+        const midY = (start.y + end.y) / 2 - 14;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${start.x} ${start.y} Q ${midX} ${midY}, ${end.x} ${end.y}`);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#fb7185');
+        path.setAttribute('stroke-width', '5');
+        path.setAttribute('stroke-dasharray', '9 6');
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('opacity', '0.82');
+
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', end.x);
+        dot.setAttribute('cy', end.y);
+        dot.setAttribute('r', '6');
+        dot.setAttribute('fill', '#f43f5e');
+        dot.setAttribute('opacity', '0.9');
+
+        svg.appendChild(path);
+        svg.appendChild(dot);
+      });
+    }
+
+    function renderTokens() {
+      const layer = document.getElementById('tokens-layer');
+      layer.innerHTML = '';
+
+      // Group players by tile so overlapping tokens offset neatly
+      const groups = {};
+      gameState.players.forEach((p, idx) => {
+        const key = p.position;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(idx);
+      });
+
+      const offsets = [
+        { dx: -1.8, dy: -1.8 },
+        { dx: 1.8, dy: -1.8 },
+        { dx: -1.8, dy: 2.0 },
+        { dx: 1.8, dy: 2.0 }
+      ];
+
+      gameState.players.forEach((p, idx) => {
+        const base = getTilePercentCenter(p.position);
+        const group = groups[p.position] || [idx];
+        const posInGroup = group.indexOf(idx);
+        const off = group.length > 1 ? offsets[posInGroup % offsets.length] : { dx: 0, dy: 0 };
+
+        const el = document.createElement('div');
+        el.className = 'player-token' + (idx === gameState.currentPlayerIndex ? ' token-active-ring' : '');
+        el.style.left = `${Math.min(96, Math.max(4, base.x + off.dx))}%`;
+        el.style.top = `${Math.min(93, Math.max(7, base.y + off.dy))}%`;
+        el.style.backgroundColor = p.color;
+        el.style.zIndex = idx === gameState.currentPlayerIndex ? '10' : String(5 + idx);
+        el.title = `${p.name} — Tile ${p.position}`;
+        el.textContent = p.icon;
+
+        layer.appendChild(el);
+      });
+    }
+
+    /**
+     * =========================================================================
+     * 7. SETUP & GAME INITIALIZATION
+     * =========================================================================
+     */
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function openSetupModal() {
+      openModal('modal-setup');
+    }
+
+    function selectSetupMode(mode) {
+      gameState.mode = mode;
+      const botBtn = document.getElementById('mode-btn-bot');
+      const multiBtn = document.getElementById('mode-btn-multi');
+      const countWrap = document.getElementById('setup-player-count-wrap');
+
+      if (mode === 'BOT') {
+        botBtn.className = 'p-2.5 rounded-xl border text-left transition bg-cyan-500/15 border-cyan-400 text-white';
+        multiBtn.className = 'p-2.5 rounded-xl border text-left transition bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500';
+        countWrap.classList.add('hidden');
+      } else {
+        multiBtn.className = 'p-2.5 rounded-xl border text-left transition bg-cyan-500/15 border-cyan-400 text-white';
+        botBtn.className = 'p-2.5 rounded-xl border text-left transition bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500';
+        countWrap.classList.remove('hidden');
+      }
+    }
+
+    function setPlayerCount(n) {
+      gameState.playerCount = n;
+      [2, 3, 4].forEach(num => {
+        const btn = document.getElementById(`pcount-${num}`);
+        if (num === n) {
+          btn.className = 'py-2 rounded-xl border text-xs font-bold bg-cyan-500/20 border-cyan-400 text-cyan-200';
+        } else {
+          btn.className = 'py-2 rounded-xl border text-xs font-bold bg-slate-800 border-slate-700 text-slate-300';
+        }
+      });
+    }
+
+    function startNewGameFromSetup() {
+      const p1Input = document.getElementById('setup-p1-name').value.trim();
+      const p1Name = p1Input || 'Grade 8 Scientist';
+      const selectedTopic = document.getElementById('setup-topic-select').value;
+
+      gameState.topicFilter = selectedTopic;
+      document.getElementById('topic-filter-select').value = selectedTopic;
+
+      gameState.players = [];
+      if (gameState.mode === 'BOT') {
+        gameState.players.push({
+          name: p1Name,
+          isBot: false,
+          position: 1,
+          shields: 1,
+          score: 0,
+          color: PLAYER_COLORS[0],
+          icon: PLAYER_ICONS[0]
+        });
+        gameState.players.push({
+          name: 'Lab Bot AI',
+          isBot: true,
+          position: 1,
+          shields: 1,
+          score: 0,
+          color: PLAYER_COLORS[1],
+          icon: PLAYER_ICONS[1]
+        });
+      } else {
+        for (let i = 0; i < gameState.playerCount; i++) {
+          gameState.players.push({
+            name: i === 0 ? p1Name : `Player ${i + 1}`,
+            isBot: false,
+            position: 1,
+            shields: 1,
+            score: 0,
+            color: PLAYER_COLORS[i],
+            icon: PLAYER_ICONS[i]
+          });
+        }
+      }
+
+      gameState.currentPlayerIndex = 0;
+      gameState.turnNumber = 1;
+      gameState.isAnimating = false;
+      gameState.awaitingQuestion = false;
+      gameState.pendingQuestion = null;
+
+      gameState.stats = {
+        APPARATUS: { right: 0, total: 0 },
+        SAFETY: { right: 0, total: 0 },
+        REPLICATION: { right: 0, total: 0 },
+        TRANSCRIPTION: { right: 0, total: 0 }
+      };
+
+      document.getElementById('activity-log').innerHTML = '';
+      closeModal('modal-setup');
+      updateTopicBadge();
+      updateUI();
+      renderTokens();
+      logMessage(`New game started! ${gameState.players[0].name} goes first.`);
+      setStatusBanner(`${gameState.players[0].name}'s turn — roll the die to move!`);
+    }
+
+    function changeTopicFilter(newTopic) {
+      gameState.topicFilter = newTopic;
+      document.getElementById('setup-topic-select').value = newTopic;
+      updateTopicBadge();
+      logMessage(`Focus topic switched to: ${getTopicLabel(newTopic)}.`);
+    }
+
+    function getTopicLabel(filterKey) {
+      const map = {
+        ALL: 'All Grade 8 Topics',
+        APPARATUS: 'Apparatuses (All A, B, C)',
+        APPARATUS_A: 'Apparatus A: Mass/Wt/Vol',
+        APPARATUS_B: 'Apparatus B: Functions',
+        APPARATUS_C: 'Apparatus C: Portable ID',
+        SAFETY: 'General Lab Safety',
+        REPLICATION: 'DNA Replication',
+        TRANSCRIPTION: 'Transcription / Translation'
+      };
+      return map[filterKey] || 'All Grade 8 Topics';
+    }
+
+    function updateTopicBadge() {
+      document.getElementById('active-filter-badge').textContent = getTopicLabel(gameState.topicFilter);
+    }
+
+    /**
+     * =========================================================================
+     * 8. DICE ROLLING, MOVEMENT & TILE INTERACTIONS
+     * =========================================================================
+     */
+    function handleRollClick() {
+      if (gameState.isAnimating || gameState.awaitingQuestion) return;
+      const current = gameState.players[gameState.currentPlayerIndex];
+      if (!current || current.isBot) return;
+      executeTurnRoll();
+    }
+
+    function executeTurnRoll() {
+      const player = gameState.players[gameState.currentPlayerIndex];
+      if (!player) return;
+
+      gameState.isAnimating = true;
+      setRollButtonEnabled(false);
+      SoundFX.roll();
+
+      const diceBox = document.getElementById('dice-box');
+      const diceFace = document.getElementById('dice-face');
+      const diceLabel = document.getElementById('dice-label');
+      diceBox.classList.add('dice-rolling');
+      diceLabel.textContent = 'Rolling...';
+
+      const finalRoll = Math.floor(Math.random() * 6) + 1;
+      const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
+      let ticks = 0;
+      const rollInterval = setInterval(() => {
+        ticks++;
+        diceFace.textContent = faces[Math.floor(Math.random() * 6)];
+        if (ticks >= 7) {
+          clearInterval(rollInterval);
+          diceBox.classList.remove('dice-rolling');
+          diceFace.textContent = faces[finalRoll - 1];
+          diceLabel.textContent = `Rolled ${finalRoll}`;
+          logMessage(`${player.name} rolled a ${finalRoll}.`);
+          movePlayerStepByStep(player, finalRoll);
+        }
+      }, 75);
+    }
+
+    function movePlayerStepByStep(player, steps) {
+      let remaining = steps;
+      let direction = 1; // 1 forward, -1 bounce back from 50 if overshot
+
+      const stepTimer = setInterval(() => {
+        if (remaining <= 0) {
+          clearInterval(stepTimer);
+          evaluateLandedTile(player);
+          return;
+        }
+
+        if (player.position === TOTAL_TILES) {
+          direction = -1;
+        } else if (player.position === 1 && direction === -1) {
+          direction = 1;
+        }
+
+        player.position += direction;
+        remaining--;
+        SoundFX.step();
+        renderTokens();
+        updatePlayersPanel();
+      }, 220);
+    }
+
+    function evaluateLandedTile(player) {
+      const pos = player.position;
+
+      // Check victory first
+      if (pos === TOTAL_TILES) {
+        gameState.isAnimating = false;
+        SoundFX.win();
+        logMessage(`🏆 ${player.name} reached Tile 50 and won BioLab Quest!`);
+        showVictory(player);
+        return;
+      }
+
+      // Check DNA Ladder
+      if (LADDERS[pos]) {
+        const dest = LADDERS[pos];
+        gameState.isAnimating = false;
+        logMessage(`${player.name} landed on DNA Ladder at Tile ${pos} (climbs to ${dest} if answered right!).`);
+        triggerQuestionModal(player, {
+          context: 'LADDER',
+          targetTile: dest,
+          baseTile: pos,
+          preferredCategory: null
+        });
+        return;
+      }
+
+      // Check Lab Hazard Chute
+      if (CHUTES[pos]) {
+        const dest = CHUTES[pos];
+        gameState.isAnimating = false;
+
+        // If player has a Safety Shield, use it automatically to block the chute
+        if (player.shields > 0) {
+          player.shields -= 1;
+          SoundFX.correct();
+          logMessage(`🛡️ ${player.name}'s Safety Shield blocked Hazard Chute ${pos} → ${dest}!`);
+          setStatusBanner(`🛡️ Safety Shield protected ${player.name} from sliding down Tile ${pos}!`);
+          updatePlayersPanel();
+          setTimeout(() => advanceToNextTurn(), 950);
+          return;
+        }
+
+        logMessage(`⚠️ ${player.name} hit Lab Hazard Chute at Tile ${pos} (slides to ${dest} if safety check fails!).`);
+        triggerQuestionModal(player, {
+          context: 'CHUTE',
+          targetTile: dest,
+          baseTile: pos,
+          preferredCategory: 'SAFETY'
+        });
+        return;
+      }
+
+      // Standard tile question check
+      gameState.isAnimating = false;
+      triggerQuestionModal(player, {
+        context: 'NORMAL',
+        targetTile: pos,
+        baseTile: pos,
+        preferredCategory: null
+      });
+    }
+
+    /**
+     * =========================================================================
+     * 9. QUESTION SELECTION, MODAL & AI BOT HANDLING
+     * =========================================================================
+     */
+    function pickQuestion(preferredCategory = null) {
+      let pool = [];
+
+      if (preferredCategory) {
+        pool = QUESTION_BANK.filter(q => q.category === preferredCategory);
+      } else if (gameState.topicFilter === 'ALL') {
+        pool = QUESTION_BANK.slice();
+      } else if (gameState.topicFilter === 'APPARATUS') {
+        pool = QUESTION_BANK.filter(q => q.category === 'APPARATUS');
+      } else if (['APPARATUS_A', 'APPARATUS_B', 'APPARATUS_C'].includes(gameState.topicFilter)) {
+        pool = QUESTION_BANK.filter(q => q.subCategory === gameState.topicFilter);
+      } else {
+        pool = QUESTION_BANK.filter(q => q.category === gameState.topicFilter);
+      }
+
+      if (pool.length === 0) pool = QUESTION_BANK.slice();
+      const idx = Math.floor(Math.random() * pool.length);
+      return pool[idx];
+    }
+
+    function triggerQuestionModal(player, meta) {
+      const q = pickQuestion(meta.preferredCategory);
+      gameState.awaitingQuestion = true;
+      gameState.pendingQuestion = q;
+      gameState.pendingContext = meta.context;
+      gameState.pendingTargetTile = meta.targetTile;
+      gameState.pendingBaseTile = meta.baseTile;
+
+      // If AI Bot is taking this turn, answer automatically after a brief pause
+      if (player.isBot) {
+        setStatusBanner(`🤖 ${player.name} is answering a ${q.subtopic} question...`);
+        setTimeout(() => {
+          // Grade 8 Bot gets ~72% accuracy
+          const botCorrect = Math.random() < 0.72;
+          const chosenIdx = botCorrect
+            ? q.answer
+            : ((q.answer + 1) % q.options.length);
+          resolveAnswer(player, chosenIdx, true);
+        }, 900);
+        return;
+      }
+
+      const modal = document.getElementById('modal-question');
+      const catPill = document.getElementById('q-category-pill');
+      const ctxPill = document.getElementById('q-context-pill');
+      const svgWrap = document.getElementById('q-svg-container');
+      const svgBox = document.getElementById('q-svg-box');
+      const promptEl = document.getElementById('q-prompt-text');
+      const optionsList = document.getElementById('q-options-list');
+      const feedbackBox = document.getElementById('q-feedback-box');
+      const continueBtn = document.getElementById('q-continue-btn');
+
+      catPill.textContent = q.subtopic;
+
+      if (meta.context === 'LADDER') {
+        ctxPill.textContent = `🧬 DNA Ladder: Climb to Tile ${meta.targetTile}`;
+        ctxPill.className = 'text-xs font-extrabold text-emerald-400';
+      } else if (meta.context === 'CHUTE') {
+        ctxPill.textContent = `⚠️ Hazard Chute: Stay or Slide to Tile ${meta.targetTile}`;
+        ctxPill.className = 'text-xs font-extrabold text-rose-400';
+      } else {
+        ctxPill.textContent = `Tile ${player.position} Challenge`;
+        ctxPill.className = 'text-xs font-bold text-cyan-300';
+      }
+
+      // Render SVG diagram if present
+      if (q.svgKey && PORTABLE_APPARATUS_SVGS[q.svgKey]) {
+        svgBox.innerHTML = PORTABLE_APPARATUS_SVGS[q.svgKey];
+        svgWrap.classList.remove('hidden');
+      } else {
+        svgBox.innerHTML = '';
+        svgWrap.classList.add('hidden');
+      }
+
+      promptEl.textContent = q.prompt;
+      optionsList.innerHTML = '';
+      feedbackBox.classList.add('hidden');
+      continueBtn.classList.add('hidden');
+
+      q.options.forEach((optText, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full text-left p-3 rounded-xl bg-slate-800/90 hover:bg-slate-750 hover:border-cyan-400 border border-slate-700 text-xs sm:text-sm text-slate-100 font-medium transition flex items-start gap-2.5';
+        const letter = ['A', 'B', 'C', 'D'][idx] || String(idx + 1);
+        btn.innerHTML = `<span class="w-6 h-6 rounded-lg bg-slate-900 border border-slate-600 flex items-center justify-center text-xs font-extrabold text-cyan-300 shrink-0">${letter}</span><span>${optText}</span>`;
+        btn.onclick = () => resolveAnswer(player, idx, false);
+        optionsList.appendChild(btn);
+      });
+
+      openModal('modal-question');
+    }
+
+    function resolveAnswer(player, chosenIdx, isBotSilent) {
+      const q = gameState.pendingQuestion;
+      if (!q) return;
+
+      const isCorrect = chosenIdx === q.answer;
+      const cat = q.category;
+
+      // Update mastery stats
+      if (gameState.stats[cat]) {
+        gameState.stats[cat].total += 1;
+        if (isCorrect) gameState.stats[cat].right += 1;
+      }
+
+      if (isCorrect) {
+        player.score += 10;
+        SoundFX.correct();
+
+        if (gameState.pendingContext === 'LADDER') {
+          player.position = gameState.pendingTargetTile;
+          SoundFX.ladder();
+          logMessage(`✅ ${player.name} answered right and climbed the DNA Ladder to Tile ${player.position}!`);
+        } else if (gameState.pendingContext === 'CHUTE') {
+          logMessage(`✅ ${player.name} passed the safety check and avoided sliding down Tile ${gameState.pendingBaseTile}!`);
+        } else {
+          // Reward a Safety Shield every 30 points (up to max 3 shields)
+          if (player.score % 30 === 0 && player.shields < 3) {
+            player.shields += 1;
+            logMessage(`🛡️ ${player.name} earned a Safety Shield for strong lab mastery!`);
+          } else {
+            logMessage(`✅ ${player.name} answered correctly (+10 pts).`);
+          }
+        }
+      } else {
+        SoundFX.wrong();
+        if (gameState.pendingContext === 'LADDER') {
+          logMessage(`❌ ${player.name} missed the question and stayed at Tile ${player.position}.`);
+        } else if (gameState.pendingContext === 'CHUTE') {
+          player.position = gameState.pendingTargetTile;
+          SoundFX.chute();
+          logMessage(`❌ ${player.name} missed the safety check and slid down to Tile ${player.position}!`);
+        } else {
+          logMessage(`❌ ${player.name} missed that one (${q.subtopic}).`);
+        }
+      }
+
+      renderTokens();
+      updatePlayersPanel();
+      updateMasteryPanel();
+
+      if (isBotSilent) {
+        gameState.awaitingQuestion = false;
+        gameState.pendingQuestion = null;
+        if (player.position === TOTAL_TILES) {
+          SoundFX.win();
+          showVictory(player);
+          return;
+        }
+        advanceToNextTurn();
+        return;
+      }
+
+      // Highlight buttons and display explanation for human player
+      const optionButtons = document.querySelectorAll('#q-options-list button');
+      optionButtons.forEach((b, idx) => {
+        b.disabled = true;
+        b.classList.remove('hover:border-cyan-400');
+        if (idx === q.answer) {
+          b.classList.add('bg-emerald-500/20', 'border-emerald-400', 'text-emerald-200');
+        } else if (idx === chosenIdx && !isCorrect) {
+          b.classList.add('bg-rose-500/20', 'border-rose-400', 'text-rose-200');
+        } else {
+          b.classList.add('opacity-50');
+        }
+      });
+
+      const feedbackBox = document.getElementById('q-feedback-box');
+      const feedbackTitle = document.getElementById('q-feedback-title');
+      const feedbackExp = document.getElementById('q-feedback-explanation');
+      const continueBtn = document.getElementById('q-continue-btn');
+
+      feedbackBox.classList.remove('hidden');
+      if (isCorrect) {
+        feedbackBox.className = 'rounded-xl p-3.5 border mb-4 bg-emerald-950/60 border-emerald-500/40';
+        feedbackTitle.className = 'font-extrabold mb-1 text-emerald-300';
+        feedbackTitle.textContent = gameState.pendingContext === 'LADDER'
+          ? `Correct! Climbed to Tile ${player.position}!`
+          : 'Correct! Great Grade 8 Science answer!';
+      } else {
+        feedbackBox.className = 'rounded-xl p-3.5 border mb-4 bg-rose-950/60 border-rose-500/40';
+        feedbackTitle.className = 'font-extrabold mb-1 text-rose-300';
+        feedbackTitle.textContent = gameState.pendingContext === 'CHUTE'
+          ? `Not quite — slid down to Tile ${player.position}.`
+          : 'Not quite — review the note below!';
+      }
+
+      feedbackExp.textContent = q.explanation;
+      continueBtn.classList.remove('hidden');
+    }
+
+    function finishQuestionTurn() {
+      const player = gameState.players[gameState.currentPlayerIndex];
+      closeModal('modal-question');
+      gameState.awaitingQuestion = false;
+      gameState.pendingQuestion = null;
+
+      if (player && player.position === TOTAL_TILES) {
+        SoundFX.win();
+        showVictory(player);
+        return;
+      }
+
+      advanceToNextTurn();
+    }
+
+    function advanceToNextTurn() {
+      gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+      if (gameState.currentPlayerIndex === 0) {
+        gameState.turnNumber += 1;
+      }
+
+      updateUI();
+      renderTokens();
+
+      const nextPlayer = gameState.players[gameState.currentPlayerIndex];
+      if (nextPlayer && nextPlayer.isBot) {
+        setRollButtonEnabled(false);
+        setStatusBanner(`🤖 ${nextPlayer.name} is rolling...`);
+        setTimeout(() => {
+          if (!gameState.awaitingQuestion && !gameState.isAnimating) {
+            executeTurnRoll();
+          }
+        }, 750);
+      } else if (nextPlayer) {
+        setRollButtonEnabled(true);
+        setStatusBanner(`${nextPlayer.name}'s turn — roll the die!`);
+      }
+    }
+
+    function showVictory(winner) {
+      setRollButtonEnabled(false);
+      document.getElementById('victory-title').textContent = `🏆 ${winner.name} Wins!`;
+      document.getElementById('victory-subtitle').textContent =
+        `Reached Tile 50 with ${winner.score} points and ${winner.shields} Safety Shield(s) remaining!`;
+      openModal('modal-victory');
+    }
+
+    /**
+     * =========================================================================
+     * 10. UI PANELS, LOGBOOK & CLIPBOARD HELPER
+     * =========================================================================
+     */
+    function updateUI() {
+      updatePlayersPanel();
+      updateMasteryPanel();
+      updateTurnHeader();
+    }
+
+    function updateTurnHeader() {
+      const player = gameState.players[gameState.currentPlayerIndex];
+      document.getElementById('round-counter').textContent = `Turn #${gameState.turnNumber}`;
+      if (!player) return;
+
+      document.getElementById('current-turn-name').innerHTML = `
+        <span class="w-3 h-3 rounded-full inline-block" style="background:${player.color}"></span>
+        <span>${player.name}</span>
+      `;
+      document.getElementById('current-turn-sub').textContent =
+        `Tile ${player.position} / ${TOTAL_TILES} • ${player.score} pts • ${player.shields} Shield(s)`;
+    }
+
+    function updatePlayersPanel() {
+      const listEl = document.getElementById('players-list');
+      listEl.innerHTML = '';
+
+      gameState.players.forEach((p, idx) => {
+        const isCurrent = idx === gameState.currentPlayerIndex;
+        const card = document.createElement('div');
+        card.className = `p-2.5 rounded-xl border flex items-center justify-between gap-2 transition ${
+          isCurrent
+            ? 'bg-slate-800/95 border-cyan-400/70 shadow-sm'
+            : 'bg-slate-950/60 border-slate-800/90'
+        }`;
+
+        const shieldsText = '🛡️'.repeat(p.shields) || 'None';
+
+        card.innerHTML = `
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-extrabold text-white shrink-0 border border-white/30" style="background:${p.color}">
+              ${p.icon}
+            </div>
+            <div class="min-w-0">
+              <div class="text-xs font-extrabold text-white truncate flex items-center gap-1.5">
+                <span>${p.name}</span>
+                ${isCurrent ? '<span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px] uppercase">Active</span>' : ''}
+              </div>
+              <div class="text-[11px] text-slate-400">
+                Tile <strong class="text-slate-200">${p.position}</strong> • <strong class="text-emerald-300">${p.score}</strong> pts
+              </div>
+            </div>
+          </div>
+          <div class="text-xs font-semibold text-amber-300 shrink-0" title="Safety Shields">
+            ${shieldsText}
+          </div>
+        `;
+        listEl.appendChild(card);
+      });
+
+      updateTurnHeader();
+    }
+
+    function updateMasteryPanel() {
+      const barsEl = document.getElementById('mastery-bars');
+      const topics = [
+        { key: 'APPARATUS', label: '1. Apparatuses (A,B,C)', barClass: 'bg-cyan-400' },
+        { key: 'SAFETY', label: '2. General Lab Safety', barClass: 'bg-amber-400' },
+
